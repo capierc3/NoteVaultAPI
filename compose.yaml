@@ -1,9 +1,32 @@
 services:
   postgres:
-    image: 'postgres:latest'
+    image: 'postgres:17'
     environment:
-      - 'POSTGRES_DB=mydatabase'
+      - 'POSTGRES_DB=notevault'
       - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      - 'POSTGRES_USER=notevault'
     ports:
-      - '5432'
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./src/main/resources/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notevault -d notevault"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - '8080:8080'
+    environment:
+      - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/notevault'
+      - 'SPRING_DATASOURCE_USERNAME=notevault'
+      - 'SPRING_DATASOURCE_PASSWORD=secret'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

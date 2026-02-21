@@ -11,7 +11,8 @@ public class ApiClient {
     private final RestClient restClient;
 
     public ApiClient() {
-        String baseUrl = System.getProperty("test.base-url", "http://localhost:8080");
+        String baseUrl = System.getProperty("test.base-url",
+                System.getenv().getOrDefault("test.base-url", "http://localhost:8080"));
         String credentials = Base64.getEncoder()
                 .encodeToString("default_user:notevault".getBytes());
 

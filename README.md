@@ -63,6 +63,7 @@ mvn test "-Dtest=RunCucumberTest"
 # Against a remote server
 mvn test "-Dtest=RunCucumberTest" "-Dtest.base-url=http://10.0.0.67:8080"
 ```
+
 ## Authentication
 
 The API uses HTTP Basic Auth that is checked against the `auth.users` table. Currently, this table is only updated with direct SQL updates
@@ -117,6 +118,13 @@ curl -X DELETE http://localhost:8080/api/v1/notes/1
 | `404`  | Note not found                              |
 | `503`  | Database unavailable                        |
 
+### Logging
+Current logging is basic request/response logging, logs can be viewed through docker
+
+```
+docker compose logs api
+```
+
 
 ### Architecture
 
@@ -129,6 +137,7 @@ curl -X DELETE http://localhost:8080/api/v1/notes/1
                        |------------------|
                        | Swagger API Docs |
                        | Spring Security  |
+                       | slf4j logging    |
                        | Junit + Mockito  |
                        | Cucumber         |
                        |------------------|
@@ -148,6 +157,7 @@ curl -X DELETE http://localhost:8080/api/v1/notes/1
 - Spring Data JPA simple integration with Database
 - SpringDoc OpenAPI to create some great API documentation with Swagger UI
 - Lombok for cleaner easy to manage code
+- slf4j easy integration for logging
 
 **JUnit 5 + Mockito**
 - Just a good testing suite
@@ -164,3 +174,4 @@ curl -X DELETE http://localhost:8080/api/v1/notes/1
 - **Notebooks** — The `Notebook` entity was created but is under used
 - **Full-text Search** — PostgreSQL's strength in this case is searching note content so lets use it.
 - **CI/CD Pipeline** — Unit tests, acceptance tests and docker builds can be easily ran for safe and easy deployments
+- **Expand Logging** - Current logging is simple and viewed through docker, 

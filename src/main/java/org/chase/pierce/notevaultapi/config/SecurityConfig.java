@@ -24,9 +24,12 @@ import java.util.Map;
 public class SecurityConfig {
 
     private final DefaultUserFilter defaultUserFilter;
+    private final RequestLoggingFilter requestLoggingFilter;
 
-    public SecurityConfig(DefaultUserFilter defaultUserFilter) {
+    public SecurityConfig(DefaultUserFilter defaultUserFilter,
+                          RequestLoggingFilter requestLoggingFilter) {
         this.defaultUserFilter = defaultUserFilter;
+        this.requestLoggingFilter = requestLoggingFilter;
     }
 
     @Bean
@@ -60,7 +63,8 @@ public class SecurityConfig {
                         body.put("message", "Access denied");
                         new ObjectMapper().writeValue(response.getOutputStream(), body);
                     }))
-            .addFilterAfter(defaultUserFilter, BasicAuthenticationFilter.class);
+            .addFilterAfter(defaultUserFilter, BasicAuthenticationFilter.class)
+            .addFilterAfter(requestLoggingFilter, DefaultUserFilter.class);
 
         return http.build();
     }

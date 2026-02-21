@@ -3,8 +3,10 @@ package org.chase.pierce.notevaultapi.service;
 import org.chase.pierce.notevaultapi.dto.CreateNoteRequest;
 import org.chase.pierce.notevaultapi.dto.UpdateNoteRequest;
 import org.chase.pierce.notevaultapi.entity.Note;
+import org.chase.pierce.notevaultapi.entity.Role;
 import org.chase.pierce.notevaultapi.entity.Tag;
 import org.chase.pierce.notevaultapi.exception.NoteNotFoundException;
+import org.chase.pierce.notevaultapi.exception.UnauthorizedAccessException;
 import org.chase.pierce.notevaultapi.repository.NoteRepository;
 import org.chase.pierce.notevaultapi.repository.TagRepository;
 import org.chase.pierce.notevaultapi.util.InputSanitizer;
@@ -54,41 +56,54 @@ public class NoteService {
         }
     }
 
-    public Note getNoteById(Long id) {
-        return noteRepository.findById(id)
+    public Note getNoteById(Long id, String username, Role role) {
+        Note note = noteRepository.findById(id)
                 .orElseThrow(() -> new NoteNotFoundException(id));
+
+        verifyOwnership(note, username, role);
+        return note;
     }
 
     @Transactional
-    public void deleteNoteById(Long id) {
-        if (!noteRepository.existsById(id)) {
-            throw new NoteNotFoundException(id);
-        }
+    public void deleteNoteById(Long id, String username, Role role) {
+        Note note = noteRepository.findById(id)
+                .orElseThrow(() -> new NoteNotFoundException(id));
+
+        verifyOwnership(note, username, role);
         noteRepository.deleteById(id);
     }
 
     @Transactional
-    public Note createNote(CreateNoteRequest request) {
+    public Note createNote(CreateNoteRequest request, String username) {
         Note note = new Note();
         note.setName(InputSanitizer.sanitizePlainText(request.getName()));
         note.setContent(InputSanitizer.sanitizeContent(request.getContent()));
-        note.setUserId(InputSanitizer.sanitizePlainText(request.getUserId()));
+        note.setUserId(username);
         note.setTags(resolveTags(request.getTags()));
 
         return noteRepository.save(note);
     }
 
     @Transactional
-    public Note updateNote(Long id, UpdateNoteRequest request) {
+    public Note updateNote(Long id, UpdateNoteRequest request, String username, Role role) {
         Note note = noteRepository.findById(id)
                 .orElseThrow(() -> new NoteNotFoundException(id));
 
+        verifyOwnership(note, username, role);
+
         note.setName(InputSanitizer.sanitizePlainText(request.getName()));
         note.setContent(InputSanitizer.sanitizeContent(request.getContent()));
-        note.setUserId(InputSanitizer.sanitizePlainText(request.getUserId()));
+        note.setUserId(username);
         note.setTags(resolveTags(request.getTags()));
 
         return noteRepository.save(note);
+    }
+
+    private void verifyOwnership(Note note, String username, Role role) {
+        if (role != Role.ADMIN && !note.getUserId().equals(username)) {
+            throw new UnauthorizedAccessException(
+                    "You do not have permission to access note with id: " + note.getId());
+        }
     }
 
     private Set<Tag> resolveTags(Set<String> tagNames) {

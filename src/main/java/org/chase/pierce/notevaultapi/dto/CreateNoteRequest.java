@@ -22,10 +22,6 @@ public class CreateNoteRequest {
     @Schema(description = "Content of the note (safe HTML allowed)", example = "<p>Discussion points from today's meeting</p>", requiredMode = Schema.RequiredMode.REQUIRED)
     private String content;
 
-    @NotBlank(message = "User ID is required")
-    @Schema(description = "ID of the user creating the note", example = "user123", requiredMode = Schema.RequiredMode.REQUIRED)
-    private String userId;
-
     @Schema(description = "ID of the notebook this note belongs to", example = "1")
     private Long notebookId;
 

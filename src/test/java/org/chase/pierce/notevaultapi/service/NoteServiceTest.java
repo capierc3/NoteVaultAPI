@@ -3,6 +3,7 @@ package org.chase.pierce.notevaultapi.service;
 import org.chase.pierce.notevaultapi.dto.CreateNoteRequest;
 import org.chase.pierce.notevaultapi.dto.UpdateNoteRequest;
 import org.chase.pierce.notevaultapi.entity.Note;
+import org.chase.pierce.notevaultapi.entity.Role;
 import org.chase.pierce.notevaultapi.entity.Tag;
 import org.chase.pierce.notevaultapi.repository.NoteRepository;
 import org.chase.pierce.notevaultapi.repository.TagRepository;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.chase.pierce.notevaultapi.exception.NoteNotFoundException;
+import org.chase.pierce.notevaultapi.exception.UnauthorizedAccessException;
 
 import java.util.HashSet;
 import java.util.List;
@@ -48,7 +50,6 @@ class NoteServiceTest {
         validRequest = new CreateNoteRequest();
         validRequest.setName("Test Note");
         validRequest.setContent("Some content");
-        validRequest.setUserId("user123");
     }
 
     @Test
@@ -186,18 +187,36 @@ class NoteServiceTest {
         verify(noteRepository).findAll();
     }
 
+    // --- getNoteById ---
+
     @Test
-    void testGetNoteById() {
+    void testGetNoteByIdOwner() {
         Note note = new Note();
         note.setId(1L);
         note.setName("Test Note");
+        note.setUserId("user123");
 
         when(noteRepository.findById(1L)).thenReturn(Optional.of(note));
 
-        Note result = noteService.getNoteById(1L);
+        Note result = noteService.getNoteById(1L, "user123", Role.USER);
 
         assertEquals(1L, result.getId());
         assertEquals("Test Note", result.getName());
+        verify(noteRepository).findById(1L);
+    }
+
+    @Test
+    void testGetNoteByIdAdmin() {
+        Note note = new Note();
+        note.setId(1L);
+        note.setName("Test Note");
+        note.setUserId("user123");
+
+        when(noteRepository.findById(1L)).thenReturn(Optional.of(note));
+
+        Note result = noteService.getNoteById(1L, "admin_user", Role.ADMIN);
+
+        assertEquals(1L, result.getId());
         verify(noteRepository).findById(1L);
     }
 
@@ -207,36 +226,85 @@ class NoteServiceTest {
 
         NoteNotFoundException exception = assertThrows(
                 NoteNotFoundException.class,
-                () -> noteService.getNoteById(99L)
+                () -> noteService.getNoteById(99L, "user123", Role.USER)
         );
 
         assertEquals("Note not found with id: 99", exception.getMessage());
         verify(noteRepository).findById(99L);
     }
 
+    @Test
+    void testGetNoteByIdForbiddenForNonOwner() {
+        Note note = new Note();
+        note.setId(1L);
+        note.setUserId("user123");
+
+        when(noteRepository.findById(1L)).thenReturn(Optional.of(note));
+
+        UnauthorizedAccessException exception = assertThrows(
+                UnauthorizedAccessException.class,
+                () -> noteService.getNoteById(1L, "other_user", Role.USER)
+        );
+
+        assertTrue(exception.getMessage().contains("1"));
+    }
+
     // --- deleteNoteById ---
 
     @Test
     void testDeleteNoteByIdSucceeds() {
-        when(noteRepository.existsById(1L)).thenReturn(true);
+        Note note = new Note();
+        note.setId(1L);
+        note.setUserId("user123");
 
-        noteService.deleteNoteById(1L);
+        when(noteRepository.findById(1L)).thenReturn(Optional.of(note));
 
-        verify(noteRepository).existsById(1L);
+        noteService.deleteNoteById(1L, "user123", Role.USER);
+
+        verify(noteRepository).findById(1L);
+        verify(noteRepository).deleteById(1L);
+    }
+
+    @Test
+    void testDeleteNoteByIdAdminSucceeds() {
+        Note note = new Note();
+        note.setId(1L);
+        note.setUserId("user123");
+
+        when(noteRepository.findById(1L)).thenReturn(Optional.of(note));
+
+        noteService.deleteNoteById(1L, "admin_user", Role.ADMIN);
+
         verify(noteRepository).deleteById(1L);
     }
 
     @Test
     void testDeleteNoteByIdThrowsWhenNotFound() {
-        when(noteRepository.existsById(99L)).thenReturn(false);
+        when(noteRepository.findById(99L)).thenReturn(Optional.empty());
 
         NoteNotFoundException exception = assertThrows(
                 NoteNotFoundException.class,
-                () -> noteService.deleteNoteById(99L)
+                () -> noteService.deleteNoteById(99L, "user123", Role.USER)
         );
 
         assertEquals("Note not found with id: 99", exception.getMessage());
-        verify(noteRepository).existsById(99L);
+        verify(noteRepository).findById(99L);
+        verify(noteRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void testDeleteNoteByIdForbiddenForNonOwner() {
+        Note note = new Note();
+        note.setId(1L);
+        note.setUserId("user123");
+
+        when(noteRepository.findById(1L)).thenReturn(Optional.of(note));
+
+        assertThrows(
+                UnauthorizedAccessException.class,
+                () -> noteService.deleteNoteById(1L, "other_user", Role.USER)
+        );
+
         verify(noteRepository, never()).deleteById(any());
     }
 
@@ -246,7 +314,7 @@ class NoteServiceTest {
     void testSavesNoteWithSanitizedFields() {
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.createNote(validRequest);
+        Note result = noteService.createNote(validRequest, "user123");
 
         assertEquals("Test Note", result.getName());
         assertEquals("Some content", result.getContent());
@@ -260,7 +328,7 @@ class NoteServiceTest {
         validRequest.setName(inputName);
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.createNote(validRequest);
+        Note result = noteService.createNote(validRequest, "user123");
 
         assertEquals(expectedName, result.getName());
     }
@@ -281,7 +349,7 @@ class NoteServiceTest {
         validRequest.setContent(inputContent);
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.createNote(validRequest);
+        Note result = noteService.createNote(validRequest, "user123");
 
         assertEquals(expectedContent, result.getContent());
     }
@@ -301,7 +369,7 @@ class NoteServiceTest {
         validRequest.setTags(null);
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.createNote(validRequest);
+        Note result = noteService.createNote(validRequest, "user123");
 
         assertTrue(result.getTags().isEmpty());
         verify(tagRepository, never()).findByName(any());
@@ -312,7 +380,7 @@ class NoteServiceTest {
         validRequest.setTags(Set.of());
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.createNote(validRequest);
+        Note result = noteService.createNote(validRequest, "user123");
 
         assertTrue(result.getTags().isEmpty());
         verify(tagRepository, never()).findByName(any());
@@ -328,7 +396,7 @@ class NoteServiceTest {
         when(tagRepository.findByName("work")).thenReturn(Optional.of(existingTag));
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.createNote(validRequest);
+        Note result = noteService.createNote(validRequest, "user123");
 
         assertEquals(1, result.getTags().size());
         assertTrue(result.getTags().contains(existingTag));
@@ -346,7 +414,7 @@ class NoteServiceTest {
         when(tagRepository.save(any(Tag.class))).thenReturn(savedTag);
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.createNote(validRequest);
+        Note result = noteService.createNote(validRequest, "user123");
 
         assertEquals(1, result.getTags().size());
         verify(tagRepository).save(any(Tag.class));
@@ -362,7 +430,7 @@ class NoteServiceTest {
         when(tagRepository.save(any(Tag.class))).thenReturn(savedTag);
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        noteService.createNote(validRequest);
+        noteService.createNote(validRequest, "user123");
 
         ArgumentCaptor<Tag> tagCaptor = ArgumentCaptor.forClass(Tag.class);
         verify(tagRepository).save(tagCaptor.capture());
@@ -382,18 +450,38 @@ class NoteServiceTest {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
         updateRequest.setName("Updated Name");
         updateRequest.setContent("Updated content");
-        updateRequest.setUserId("user456");
 
         when(noteRepository.findById(1L)).thenReturn(Optional.of(existingNote));
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.updateNote(1L, updateRequest);
+        Note result = noteService.updateNote(1L, updateRequest, "user123", Role.USER);
 
         assertEquals("Updated Name", result.getName());
         assertEquals("Updated content", result.getContent());
-        assertEquals("user456", result.getUserId());
+        assertEquals("user123", result.getUserId());
         verify(noteRepository).findById(1L);
         verify(noteRepository).save(any(Note.class));
+    }
+
+    @Test
+    void testUpdateNoteAdminCanUpdateAnyNote() {
+        Note existingNote = new Note();
+        existingNote.setId(1L);
+        existingNote.setName("Old Name");
+        existingNote.setContent("Old content");
+        existingNote.setUserId("user123");
+
+        UpdateNoteRequest updateRequest = new UpdateNoteRequest();
+        updateRequest.setName("Admin Updated");
+        updateRequest.setContent("Admin content");
+
+        when(noteRepository.findById(1L)).thenReturn(Optional.of(existingNote));
+        when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Note result = noteService.updateNote(1L, updateRequest, "admin_user", Role.ADMIN);
+
+        assertEquals("Admin Updated", result.getName());
+        assertEquals("admin_user", result.getUserId());
     }
 
     @Test
@@ -401,17 +489,36 @@ class NoteServiceTest {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
         updateRequest.setName("Updated Name");
         updateRequest.setContent("Updated content");
-        updateRequest.setUserId("user123");
 
         when(noteRepository.findById(99L)).thenReturn(Optional.empty());
 
         NoteNotFoundException exception = assertThrows(
                 NoteNotFoundException.class,
-                () -> noteService.updateNote(99L, updateRequest)
+                () -> noteService.updateNote(99L, updateRequest, "user123", Role.USER)
         );
 
         assertEquals("Note not found with id: 99", exception.getMessage());
         verify(noteRepository).findById(99L);
+        verify(noteRepository, never()).save(any(Note.class));
+    }
+
+    @Test
+    void testUpdateNoteForbiddenForNonOwner() {
+        Note existingNote = new Note();
+        existingNote.setId(1L);
+        existingNote.setUserId("user123");
+
+        UpdateNoteRequest updateRequest = new UpdateNoteRequest();
+        updateRequest.setName("Updated Name");
+        updateRequest.setContent("Updated content");
+
+        when(noteRepository.findById(1L)).thenReturn(Optional.of(existingNote));
+
+        assertThrows(
+                UnauthorizedAccessException.class,
+                () -> noteService.updateNote(1L, updateRequest, "other_user", Role.USER)
+        );
+
         verify(noteRepository, never()).save(any(Note.class));
     }
 
@@ -426,16 +533,14 @@ class NoteServiceTest {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
         updateRequest.setName("<script>alert('xss')</script>Updated");
         updateRequest.setContent("<p>Safe</p><script>evil()</script>");
-        updateRequest.setUserId("<b>user456</b>");
 
         when(noteRepository.findById(1L)).thenReturn(Optional.of(existingNote));
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.updateNote(1L, updateRequest);
+        Note result = noteService.updateNote(1L, updateRequest, "user123", Role.USER);
 
         assertEquals("alert('xss')Updated", result.getName());
         assertEquals("<p>Safe</p>evil()", result.getContent());
-        assertEquals("user456", result.getUserId());
     }
 
     @Test
@@ -454,14 +559,13 @@ class NoteServiceTest {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
         updateRequest.setName("Updated Name");
         updateRequest.setContent("Updated content");
-        updateRequest.setUserId("user123");
         updateRequest.setTags(Set.of("work"));
 
         when(noteRepository.findById(1L)).thenReturn(Optional.of(existingNote));
         when(tagRepository.findByName("work")).thenReturn(Optional.of(existingTag));
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.updateNote(1L, updateRequest);
+        Note result = noteService.updateNote(1L, updateRequest, "user123", Role.USER);
 
         assertEquals(1, result.getTags().size());
         assertTrue(result.getTags().contains(existingTag));
@@ -483,13 +587,12 @@ class NoteServiceTest {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
         updateRequest.setName("Updated Name");
         updateRequest.setContent("Updated content");
-        updateRequest.setUserId("user123");
         updateRequest.setTags(null);
 
         when(noteRepository.findById(1L)).thenReturn(Optional.of(existingNote));
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.updateNote(1L, updateRequest);
+        Note result = noteService.updateNote(1L, updateRequest, "user123", Role.USER);
 
         assertTrue(result.getTags().isEmpty());
     }
@@ -509,7 +612,6 @@ class NoteServiceTest {
         UpdateNoteRequest updateRequest = new UpdateNoteRequest();
         updateRequest.setName("Updated Name");
         updateRequest.setContent("Updated content");
-        updateRequest.setUserId("user123");
         updateRequest.setTags(Set.of("newtag"));
 
         when(noteRepository.findById(1L)).thenReturn(Optional.of(existingNote));
@@ -517,7 +619,7 @@ class NoteServiceTest {
         when(tagRepository.save(any(Tag.class))).thenReturn(savedTag);
         when(noteRepository.save(any(Note.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Note result = noteService.updateNote(1L, updateRequest);
+        Note result = noteService.updateNote(1L, updateRequest, "user123", Role.USER);
 
         assertEquals(1, result.getTags().size());
         verify(tagRepository).save(any(Tag.class));

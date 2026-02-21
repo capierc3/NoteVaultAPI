@@ -17,8 +17,12 @@ public final class InputSanitizer {
             "(javascript|data|vbscript)\\s*:",
             Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern DANGEROUS_HREF_TAG_PATTERN = Pattern.compile(
+            "<a\\s+[^>]*href\\s*=\\s*\"\\s*(javascript|data|vbscript):[^\"]*\"[^>]*>(.*?)</a>",
+            Pattern.CASE_INSENSITIVE
+    );
     private static final Pattern EVENT_HANDLER_PATTERN = Pattern.compile(
-            "\\bon\\w+\\s*=",
+            "\\bon\\w+\\s*=\\s*\"[^\"]*\"|\\bon\\w+\\s*=\\s*'[^']*'|\\bon\\w+\\s*=\\s*\\S+",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -35,6 +39,7 @@ public final class InputSanitizer {
             return null;
         }
         String sanitized = DANGEROUS_TAG_PATTERN.matcher(input).replaceAll("");
+        sanitized = DANGEROUS_HREF_TAG_PATTERN.matcher(sanitized).replaceAll("$2");
         sanitized = EVENT_HANDLER_PATTERN.matcher(sanitized).replaceAll("");
         sanitized = DANGEROUS_PROTOCOL_PATTERN.matcher(sanitized).replaceAll("");
         return sanitized.trim();

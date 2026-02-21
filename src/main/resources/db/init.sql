@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS ud.note_tags (
     PRIMARY KEY (note_id, tag_id)
 );
 
--- AUTH schema 
+-- AUTH schema
 CREATE SCHEMA IF NOT EXISTS auth;
 
 CREATE TABLE IF NOT EXISTS auth.users (
